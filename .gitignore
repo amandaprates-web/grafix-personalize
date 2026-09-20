@@ -1,0 +1,47 @@
+# ===== Node.js (servico-auth, servico-clientes, servico-produtos, servico-pedidos) =====
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+
+# ===== Variáveis de ambiente / segredos =====
+.env
+.env.*
+!.env.example
+mcp/.env
+
+# ===== Python (mcp/) =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+pip-log.txt
+.pytest_cache/
+
+# ===== Docker =====
+*.pid
+
+# ===== Logs =====
+logs/
+*.log
+
+# ===== Editores / IDEs =====
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ===== Sistema Operacional =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== Build / Cache diversos =====
+dist/
+build/
+coverage/
+.cache/
