@@ -132,6 +132,15 @@ def extrair_texto(resultado):
     return "\n".join(conteudo)
 
 
+def exibir_apresentacao():
+    print("\n" + "=" * 60)
+    print("🤖 GrafixBot")
+    print("Olá! Sou o assistente virtual da Grafix Personalize.")
+    print("Não sou uma pessoa real, mas posso ajudar com clientes, produtos/estoque e pedidos.")
+    print("Digite 'sair' para encerrar o chat.")
+    print("=" * 60 + "\n")
+
+
 async def chat(cliente_IA, ferramentas):
     tools = [f["declaracao"] for f in ferramentas.values()]
 
@@ -204,6 +213,7 @@ async def executar():
             servicos = await conectar_servicos(stack)
             ferramentas = await get_ferramentas(servicos)
 
+            exibir_apresentacao()
             await chat(cliente_IA, ferramentas)
         finally:
             await finalizar(stack)

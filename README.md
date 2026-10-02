@@ -1,6 +1,6 @@
 # Grafix Personalize — Backend SOA
 
-Sistema de gestão operacional para uma gráfica/papelaria de pequeno porte, dividido em microsserviços RESTful, containerizados com Docker, e preparado para ser consumido por uma IA através do protocolo MCP (Model Context Protocol).
+Sistema de gestão operacional para uma gráfica/papelaria, dividido em microsserviços RESTful, containerizados com Docker, e preparado para ser consumido por uma IA através do protocolo MCP (Model Context Protocol).
 
 ## Requisitos do Sistema
 
@@ -13,12 +13,12 @@ Sistema de gestão operacional para uma gráfica/papelaria de pequeno porte, div
 
 A solução é organizada em 4 serviços independentes, cada um com seu próprio banco de dados lógico no MongoDB:
 
-| Serviço            | Porta | Banco de Dados   | Responsabilidade                              |
-|--------------------|-------|-----------------|-----------------------------------------------|
-| **servico-auth**   | 3000  | grafix-auth     | Registro, login e autenticação JWT            |
-| **servico-clientes** | 3001  | grafix-clientes | CRUD de clientes e perfis                   |
-| **servico-produtos** | 3002  | grafix-produtos | CRUD de produtos e monitoramento de estoque |
-| **servico-pedidos** | 3003  | grafix-pedidos  | CRUD de pedidos e rastreamento por status    |
+| Serviço | Porta | Banco de dados | Responsabilidade |
+|---|---:|---|---|
+| servico-auth | 3000 | grafix-auth | Registro, login e autenticação JWT |
+| servico-clientes | 3001 | grafix-clientes | CRUD de clientes |
+| servico-produtos | 3002 | grafix-produtos | CRUD de produtos e monitoramento de estoque |
+| servico-pedidos | 3003 | grafix-pedidos | CRUD de pedidos e rastreio por status |
 
 **Benefícios desta arquitetura:**
 - ✅ Cada serviço pode escalar independentemente
@@ -32,48 +32,65 @@ A solução é organizada em 4 serviços independentes, cada um com seu próprio
 
 ### Passo 1: Preparar o ambiente
 
-```bash
+```powershell
 # Clone ou extraia o projeto
 cd grafix-personalize
-
-# (Opcional) Edite o JWT_SECRET no arquivo .env para maior segurança
-nano .env
 ```
 
-### Passo 2: Subir os serviços com Docker Compose
+### Passo 2: Verificar o arquivo de ambiente
 
-```bash
+O projeto usa o arquivo raiz `.env` para configuração geral, incluindo `JWT_SECRET`.
+
+```powershell
+# (Opcional) Edite o JWT_SECRET no arquivo .env para maior segurança
+code .env
+```
+
+### Passo 3: Criar a rede Docker compartilhada
+
+A configuração do `docker-compose.yml` utiliza uma rede chamada `grafix-net` e ela precisa existir antes do primeiro `up`.
+
+```powershell
 # Criar rede compartilhada (só precisa fazer uma vez)
 docker network create grafix-net
+```
 
-# Build e execução
+> Se a rede já existir, o comando informa que ela já foi criada; isso é normal.
+
+---
+
+## Subindo os Serviços
+
+```powershell
 docker compose up --build -d
+```
 
-# Verificar status dos containers
+```powershell
 docker compose ps
 ```
 
-**Saída esperada:**
+**Saída aproximadamente esperada:**
 ```
 NAME                 STATUS          PORTS
 grafix-mongo         Up 2 minutes    27017/tcp
-servico-auth         Up 2 minutes    0.0.0.0:3000->3000/tcp
-servico-clientes     Up 2 minutes    0.0.0.0:3001->3001/tcp
-servico-produtos     Up 2 minutes    0.0.0.0:3002->3002/tcp
-servico-pedidos      Up 2 minutes    0.0.0.0:3003->3003/tcp
+grafix-auth          Up 2 minutes    0.0.0.0:3000->3000/tcp
+grafix-clientes      Up 2 minutes    0.0.0.0:3001->3001/tcp
+grafix-produtos      Up 2 minutes    0.0.0.0:3002->3002/tcp
+grafix-pedidos       Up 2 minutes    0.0.0.0:3003->3003/tcp
 ```
 
-### Passo 3: População Automática de Dados (Seed)
+### Passo 4: População Automática de Dados (Seed)
 
-Ao subir o projeto pela primeira vez, o arquivo `init-mongo.js` popula automaticamente:
-- ✅ 5 clientes de exemplo
-- ✅ 10 produtos com diferentes categorias
-- ✅ 15 pedidos em vários status
+Ao subir o projeto pela primeira vez, o arquivo `init-mongo.js` popula automaticamente os bancos de dados com dados de exemplo, incluindo:
 
-Esse processo é executado automaticamente apenas quando o volume do MongoDB está vazio (primeira execução).
+- clientes de demonstração
+- produtos iniciais
+- pedidos de exemplo
+
+Esse processo roda apenas quando o volume do MongoDB estiver vazio.
 
 **Para resetar os dados:**
-```bash
+```powershell
 docker compose down -v
 docker compose up --build -d
 ```
@@ -84,49 +101,56 @@ docker compose up --build -d
 
 ## Autenticação e Testes
 
-### Credenciais Padrão para Testes
+O serviço de autenticação não vem com um usuário padrão pré-cadastrado. O usuário deve ser criado via endpoint de registro antes de fazer login.
 
-Para testes rápidos, use as credenciais abaixo (pré-populadas no seed):
+### 1. Criar um usuário
 
+```powershell
+Invoke-RestMethod -Method Post -Uri http://localhost:3000/auth/registro `
+  -ContentType "application/json; charset=utf-8" `
+  -Body '{
+    "nome": "Usuário Demo",
+    "email": "demo@grafix.com",
+    "senha": "demo123456",
+    "perfil": "gestor"
+  }'
 ```
-Email: demo@grafix.com
-Senha: demo123456
-```
 
-### 1. Fazer Login e Obter Token JWT
+### 2. Fazer Login e Obter Token JWT
 
-```bash
-curl -X POST http://localhost:3000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"demo@grafix.com","senha":"demo123456"}'
+```powershell
+$resp = Invoke-RestMethod -Method Post -Uri http://localhost:3000/auth/login `
+  -ContentType "application/json; charset=utf-8" `
+  -Body '{"email":"demo@grafix.com","senha":"demo123456"}'
+
+$token = $resp.token
+$h = @{ Authorization = "Bearer $token" }
+
+# (Opcional) Ver a resposta completa
+$resp | ConvertTo-Json
 ```
 
 **Resposta esperada:**
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "usuario": {
-    "id": "...",
-    "nome": "Demo User",
-    "email": "demo@grafix.com"
-  }
+    "token":  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhYmZiY2Y0Y2Q3MDM3OGVkODgwMTM1MiIsInBlcmZpbCI6Imdlc3RvciIsImlhdCI6MTc5MDk1MjEzNSwiZXhwIjoxNzkwOTgwOTM1fQ.TCFQ6o7Zoty7jeL26rh515PiorZ9wpff9_Uaw1lz6xI",
+    "perfil":  "gestor",
+    "nome":  "Usuário Demo"
 }
 ```
 
-Copie o valor de `token` para usar nos próximos passos.
+### 3. Testar Serviço de Clientes
 
-### 2. Testar Serviço de Clientes
-
-```bash
+```powershell
 # Listar todos os clientes
-curl -X GET http://localhost:3001/clientes \
-  -H "Authorization: Bearer <seu_token_aqui>"
+Invoke-RestMethod -Method Get -Uri http://localhost:3001/clientes `
+  -Headers $h
 
 # Criar novo cliente
-curl -X POST http://localhost:3001/clientes \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <seu_token_aqui>" \
-  -d '{
+Invoke-RestMethod -Method Post -Uri http://localhost:3001/clientes `
+  -ContentType "application/json; charset=utf-8" `
+  -Headers $h `
+  -Body '{
     "nome": "Novo Cliente",
     "email": "cliente@example.com",
     "telefone": "(71) 9 9999-9999",
@@ -134,88 +158,88 @@ curl -X POST http://localhost:3001/clientes \
   }'
 ```
 
-### 3. Testar Serviço de Produtos
+### 4. Testar Serviço de Produtos
 
-```bash
+```powershell
 # Listar todos os produtos
-curl -X GET http://localhost:3002/produtos \
-  -H "Authorization: Bearer <seu_token_aqui>"
+Invoke-RestMethod -Method Get -Uri http://localhost:3002/produtos `
+  -Headers $h
 
 # Criar novo produto
-curl -X POST http://localhost:3002/produtos \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <seu_token_aqui>" \
-  -d '{
+Invoke-RestMethod -Method Post -Uri http://localhost:3002/produtos `
+  -ContentType "application/json; charset=utf-8" `
+  -Headers $h `
+  -Body '{
     "nome": "Caderno A4",
     "descricao": "Caderno personalizado tamanho A4",
     "preco": 25.90,
     "estoque": 100,
-    "categoria": "cadernos"
+    "estoqueMinimo": 20
   }'
 
-# Produtos com estoque baixo (< 10 unidades)
-curl -X GET http://localhost:3002/produtos/baixo-estoque \
-  -H "Authorization: Bearer <seu_token_aqui>"
+# Produtos com estoque baixo (abaixo do estoque mínimo)
+Invoke-RestMethod -Method Get -Uri http://localhost:3002/produtos/estoque-baixo `
+  -Headers $h
 ```
 
-### 4. Testar Serviço de Pedidos
+### 5. Testar Serviço de Pedidos
 
-```bash
+```powershell
 # Listar todos os pedidos
-curl -X GET http://localhost:3003/pedidos \
-  -H "Authorization: Bearer <seu_token_aqui>"
+Invoke-RestMethod -Method Get -Uri http://localhost:3003/pedidos `
+  -Headers $h
 
 # Criar novo pedido
-curl -X POST http://localhost:3003/pedidos \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <seu_token_aqui>" \
-  -d '{
-    "cliente_id": "...",
-    "produtos": [
-      {"produto_id": "...", "quantidade": 10}
-    ],
-    "status": "pendente",
-    "data_entrega": "2026-10-15"
+Invoke-RestMethod -Method Post -Uri http://localhost:3003/pedidos `
+  -ContentType "application/json; charset=utf-8" `
+  -Headers $h `
+  -Body '{
+    "cliente": "Ana Beatriz Souza",
+    "descricao": "500 cartões de visita",
+    "status": "Em Produção",
+    "valorTotal": 229.5,
+    "dataEntrega": "2026-10-15"
   }'
+```
+### 6. Health Check (sem autenticação)
 
-# Filtrar pedidos por status
-curl -X GET "http://localhost:3003/pedidos?status=em_producao" \
-  -H "Authorization: Bearer <seu_token_aqui>"
+```powershell
+Invoke-RestMethod http://localhost:3000/health
+Invoke-RestMethod http://localhost:3001/health
+Invoke-RestMethod http://localhost:3002/health
+Invoke-RestMethod http://localhost:3003/health
 ```
 
-### 5. Health Check (sem autenticação)
+Resposta esperada:
 
-```bash
-# Verificar se os serviços estão rodando
-curl http://localhost:3000/health
-curl http://localhost:3001/health
-curl http://localhost:3002/health
-curl http://localhost:3003/health
-
-# Resposta esperada:
-# {"status":"ok"}
 ```
+status servico 
+------ ------- 
+ok     auth    
+ok     clientes
+ok     produtos
+ok     pedidos 
+
+```
+
+Os retornos variam conforme o serviço, por exemplo `clientes`, `produtos` ou `pedidos`.
 
 ---
 
-## Testando Resiliência
+## Testes de Resiliência
 
 Um dos requisitos principais é que a falha em um serviço não afete os outros. Para testar:
 
-```bash
-# Derrubar o serviço de produtos
+```powershell
+# Parar o serviço de produtos
 docker compose stop servico-produtos
 
-# Tentar acessar outros serviços - devem responder normalmente
-curl -X GET http://localhost:3001/clientes \
-  -H "Authorization: Bearer <seu_token_aqui>"
+# Ao tentar acessar outros serviços - devem responder normalmente
+Invoke-RestMethod -Method Get -Uri http://localhost:3001/clientes `
+  -Headers $h
 
 # Trazer o serviço de volta
 docker compose start servico-produtos
-
-# Deve retomar funcionamento automaticamente
-curl -X GET http://localhost:3002/produtos \
-  -H "Authorization: Bearer <seu_token_aqui>"
 ```
 
 ---
@@ -226,9 +250,7 @@ O MCP permite que agentes de IA consultem dados do sistema em linguagem natural,
 
 ### Estrutura MCP
 
-A pasta `mcp/` contém:
-
-```
+```text
 mcp/
 ├── clientes/
 │   └── ferramentas.py       # Ferramentas de CRUD de clientes
@@ -247,10 +269,10 @@ Cada serviço MCP roda em seu próprio container Docker e conecta aos serviços 
 
 #### 1. Criar usuário de serviço para o MCP (com serviços já rodando)
 
-```bash
-curl -X POST http://localhost:3000/auth/registro \
-  -H "Content-Type: application/json" \
-  -d '{
+```powershell
+Invoke-RestMethod -Method Post -Uri http://localhost:3000/auth/registro `
+  -ContentType "application/json; charset=utf-8" `
+  -Body '{
     "nome": "MCP Service",
     "email": "mcp@grafix.com",
     "senha": "mcp123456",
@@ -262,19 +284,21 @@ curl -X POST http://localhost:3000/auth/registro \
 
 #### 2. Configurar variáveis de ambiente MCP
 
-```bash
-cd mcp
-cp .env.example .env
+```powershell
+Set-Location mcp
+
+# Crie o arquivo apenas se ele ainda não existir
+if (-not (Test-Path .env)) { New-Item -ItemType File -Path .env }
 
 # Edite o arquivo .env com:
 # - GOOGLE_API_KEY (obtenha em https://ai.google.dev)
 # - MCP_EMAIL e MCP_SENHA (as credenciais criadas acima)
-nano .env
+code .env
 ```
 
 #### 3. Subir os containers MCP
 
-```bash
+```powershell
 docker compose up --build -d
 ```
 
@@ -285,12 +309,15 @@ Isso sobe 3 containers:
 
 #### 4. Executar o chat com Gemini
 
-```bash
+Importante: o script `chat_google.py` usa `load_dotenv()` sem apontar explicitamente um caminho, então a execução deve ocorrer a partir da pasta `mcp`.
+
+```powershell
 # Instalar dependências Python (fora do Docker)
+cd mcp
 pip install -r requirements.txt
 
 # Rodar o chat
-python3 chat_google.py
+python chat_google.py
 ```
 
 ### Exemplos de Perguntas para o Chat IA
@@ -304,7 +331,6 @@ Com o chat rodando, você pode fazer perguntas naturais:
 > Quais pedidos estão em produção?
 > Crie um novo cliente chamado "João Silva"
 > Qual é o valor total de todos os pedidos?
-> Mostre detalhes do pedido com ID ...
 ```
 
 A IA interpreta as perguntas e chama as ferramentas MCP automaticamente.
@@ -315,7 +341,7 @@ A IA interpreta as perguntas e chama as ferramentas MCP automaticamente.
 
 ### Ver logs de um serviço específico
 
-```bash
+```powershell
 # Logs em tempo real
 docker compose logs -f servico-produtos
 
@@ -328,7 +354,7 @@ docker compose logs -f
 
 ### Conectar ao MongoDB diretamente
 
-```bash
+```powershell
 docker compose exec grafix-mongo mongosh
 ```
 
@@ -350,61 +376,25 @@ db.clientes.find()
 // Sair
 exit
 ```
-
 ---
 
-## Troubleshooting
-
-### Erro: "Porta 3000 já está em uso"
-
-```bash
-# Encontrar processo usando a porta
-lsof -i :3000
-
-# Matar o processo (Linux/Mac)
-kill -9 <PID>
-
-# Ou mudar a porta no docker-compose.yml
-# Altere "3000:3000" para "3001:3000" (exemplo)
-```
-
-### Erro: "Cannot connect to Docker daemon"
-
-```bash
-# Verifique se Docker está rodando
-docker ps
-
-# Se não estiver, inicie o Docker Desktop ou serviço Docker
-# Linux: sudo systemctl start docker
-# Mac: open /Applications/Docker.app
-```
-
-### Serviço não consegue conectar ao MongoDB
-
-```bash
-# Verifique se o container MongoDB está rodando
-docker compose ps grafix-mongo
-
-# Se não estiver, reinicie tudo
-docker compose down
-docker compose up --build -d
-```
+## Solução de Problemas
 
 ### Token JWT expirado
 
 Se receber erro `401 Unauthorized`, faça login novamente e use um novo token:
 
-```bash
-curl -X POST http://localhost:3000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"demo@grafix.com","senha":"demo123456"}'
+```powershell
+Invoke-RestMethod -Method Post -Uri http://localhost:3000/auth/login `
+  -ContentType "application/json; charset=utf-8" `
+  -Body '{"email":"demo@grafix.com","senha":"demo123456"}'
 ```
 
 ### Volume do MongoDB persistindo dados antigos
 
 Para uma limpeza total:
 
-```bash
+```powershell
 # Parar e remover containers + volumes
 docker compose down -v
 
@@ -416,72 +406,68 @@ docker compose up --build -d
 
 ## Estrutura do Projeto
 
-```
+```text
 grafix-personalize/
-├── servico-auth/              # Microsserviço de autenticação
+├── .env
+├── docker-compose.yml
+├── init-mongo.js
+├── README.md
+├── servico-auth/
 │   ├── controllers/
 │   ├── models/
 │   ├── middlewares/
+│   ├── routes/
 │   ├── package.json
+│   ├── server.js
 │   └── Dockerfile
-├── servico-clientes/          # Microsserviço de clientes
-├── servico-produtos/          # Microsserviço de produtos
-├── servico-pedidos/           # Microsserviço de pedidos
-├── mcp/                       # Camada MCP com IA
+├── servico-clientes/
+│   ├── controllers/
+│   ├── models/
+│   ├── middlewares/
+│   ├── routes/
+│   ├── package.json
+│   ├── server.js
+│   └── Dockerfile
+├── servico-produtos/
+│   ├── controllers/
+│   ├── models/
+│   ├── middlewares/
+│   ├── routes/
+│   ├── package.json
+│   ├── server.js
+│   └── Dockerfile
+├── servico-pedidos/
+│   ├── controllers/
+│   ├── models/
+│   ├── middlewares/
+│   ├── routes/
+│   ├── package.json
+│   ├── server.js
+│   └── Dockerfile
+├── mcp/
 │   ├── clientes/
 │   ├── produtos/
 │   ├── pedidos/
 │   ├── chat_google.py
+│   ├── .env
+│   ├── Dockerfile
 │   └── requirements.txt
-├── docker-compose.yml         # Orquestração de containers
-├── init-mongo.js              # Script de seed (dados iniciais)
-├── .env.example               # Variáveis de ambiente
-└── README.md                  # Este arquivo
+└── .gitignore
 ```
 
 ---
 
 ## Fluxo de Desenvolvimento
 
-1. **Desenvolvimento local:** Rode `docker compose up` e desenvolva os serviços
-2. **Testes:** Use os endpoints com cURL ou Postman
-3. **Resiliência:** Teste derrubar serviços individuais
-4. **Integração IA:** Configure MCP e teste com Gemini
-5. **Produção:** Faça push para repositório, implemente CI/CD (GitHub Actions)
+1. Preparar ambiente e rede Docker
+2. Subir os serviços com `docker compose up --build -d`
+3. Criar usuário e autenticar
+4. Validar endpoints e health checks
+5. Configurar MCP e testar IA
+6. Fazer melhorias e deploys em seguida
 
 ---
 
-## Próximos Passos (Não Incluído)
-
-1. **Frontend Dashboard** (Vue.js 3 + Vite)
-   - Interface para gerenciar clientes, produtos e pedidos
-   - Quadro Kanban para rastreamento de pedidos
-   - Gráficos com indicadores operacionais
-   - Portal público de autoatendimento
-
-2. **Integração com Cloudinary**
-   - Upload de imagens de produtos
-   - Referências visuais de clientes
-
-3. **CI/CD com GitHub Actions**
-   - Build automático
-   - Testes unitários
-   - Deploy em produção (Vercel/Render)
-
-4. **OpenAI API** (alternativa a Google Gemini)
-   - Suporte para múltiplos provedores de IA
-
----
-
-## Suporte
-
-Para dúvidas ou problemas:
-1. Verifique a seção **Troubleshooting** acima
-2. Inspect dos containers com `docker logs`
-3. Consulte a documentação oficial: [Docker](https://docs.docker.com), [MongoDB](https://docs.mongodb.com), [Node.js](https://nodejs.org/docs)
-
----
-
-**Versão:** 1.0  
-**Última atualização:** Setembro 2026  
-**Desenvolvido para:** POSWEB - Instituto Federal da Bahia
+Versão: 1.1
+Última atualização: outubro de 2026
+Desenvolvido para: POSWEB — Instituto Federal da Bahia
